@@ -94,6 +94,38 @@ resource "aws_db_instance" "backend_postgres" {
   )
 }
 
+module "aurora" {
+  source  = "terraform-aws-modules/rds-aurora/aws"
+  version = "~> 3.0"
+
+  name           = "${var.namespace}${var.environment}"
+  engine         = "aurora-postgresql"
+  engine_version = "11.9"
+  instance_type  = "db.r5.large" # TODO - parameterize and figure out correct size
+
+  vpc_id  = var.vpc_id
+  subnets = var.private_subnets
+
+  replica_count           = 1
+  allowed_security_groups = [var.custom_internal_security_group_id == "" ? aws_security_group.internal.0.id : var.custom_internal_security_group_id]
+  allowed_cidr_blocks     = [var.cidr_block]
+
+  storage_encrypted   = true
+  apply_immediately   = true
+  monitoring_interval = 10
+
+  db_parameter_group_name         = "default"
+  db_cluster_parameter_group_name = "default"
+
+  enabled_cloudwatch_logs_exports = ["postgresql"]
+
+  tags = map(
+    "Name", "efs-${var.namespace}-${var.environment}",
+    "Stack", "${var.namespace}-${var.environment}",
+    "Customer", var.namespace
+  )
+}
+
 resource "kubernetes_namespace" "dbt_cloud" {
   count = var.existing_namespace ? 0 : 1
   metadata {
